@@ -1,0 +1,51 @@
+name: "Demo: Docker Build"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    runs-on: [self-hosted, doks-demo]
+    steps:
+      - name: Introduction
+        run: |
+          echo "============================================"
+          echo "  DEMO: Docker Build (DinD)"
+          echo "============================================"
+          echo ""
+          echo "This job demonstrates Docker-in-Docker support."
+          echo "Existing workflows work WITHOUT modification."
+          echo ""
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify Docker availability
+        run: |
+          echo "Docker version:"
+          docker version
+          echo ""
+          echo "Docker info (abbreviated):"
+          docker info | head -20
+
+      - name: Build demo application
+        run: |
+          echo ""
+          echo "Building demo-app Docker image..."
+          docker build -t demo-app:latest ./demo-app
+          echo ""
+          echo "Build complete!"
+
+      - name: List built image
+        run: |
+          echo "Successfully built image:"
+          docker images demo-app:latest
+          echo ""
+
+      - name: Run container test
+        run: |
+          echo "Running container..."
+          echo ""
+          docker run --rm demo-app:latest
+          echo ""
+          echo "SUCCESS: Docker commands work inside runner pod."
