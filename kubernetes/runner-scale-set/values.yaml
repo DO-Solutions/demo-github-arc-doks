@@ -22,15 +22,6 @@ template:
         value: "jobs"
         effect: "NoSchedule"
     priorityClassName: arc-runner
-    containers:
-      - name: runner
-        resources:
-          limits:
-            cpu: "1500m"
-            memory: "3Gi"
-          requests:
-            cpu: "500m"
-            memory: "1Gi"
 
 # Listener will automatically schedule on management nodes
 # because jobs nodes have taints and listener has no tolerations
