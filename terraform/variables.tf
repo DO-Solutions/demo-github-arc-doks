@@ -19,11 +19,17 @@ variable "vpc_ip_range" {
 variable "cluster_subnet" {
   description = "DOKS cluster subnet for pod network (CIDR notation)"
   type        = string
-  default     = "10.201.0.0/20"
+  default     = "10.240.0.0/16"
 }
 
 variable "service_subnet" {
   description = "DOKS service subnet (CIDR notation)"
   type        = string
-  default     = "10.202.0.0/20"
+  default     = "10.241.0.0/16"
+}
+
+variable "kubernetes_version" {
+  description = "DOKS Kubernetes version"
+  type        = string
+  default     = "1.34.1-do.2"
 }

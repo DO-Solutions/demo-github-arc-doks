@@ -1,0 +1,22 @@
+# ARC Controller Helm values
+# Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
+
+replicaCount: 1
+
+# Run on management nodes (no taint, so no toleration needed)
+nodeSelector:
+  node-role: management
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Enable metrics endpoints
+metrics:
+  controllerManagerAddr: ":8080"
+  listenerAddr: ":8080"
+  listenerEndpoint: "/metrics"

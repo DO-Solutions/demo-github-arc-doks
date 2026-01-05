@@ -1,16 +1,13 @@
-data "digitalocean_kubernetes_versions" "current" {
-  # Get latest stable version
-}
-
 resource "digitalocean_kubernetes_cluster" "main" {
   name           = "${var.project_name}-cluster"
   region         = var.region
-  version        = data.digitalocean_kubernetes_versions.current.latest_version
+  version        = var.kubernetes_version
   vpc_uuid       = digitalocean_vpc.main.id
   cluster_subnet = var.cluster_subnet
   service_subnet = var.service_subnet
 
-  # Management node pool - fixed size for ARC controller and listeners
+  # Management node pool - fixed size for ARC controller, listeners, and system pods
+  # No taint - allows system pods (coredns, hubble, csi, etc.) to schedule here
   node_pool {
     name       = "management"
     size       = "s-2vcpu-4gb"
@@ -18,12 +15,6 @@ resource "digitalocean_kubernetes_cluster" "main" {
 
     labels = {
       "node-role" = "management"
-    }
-
-    taint {
-      key    = "node-role"
-      value  = "management"
-      effect = "NoSchedule"
     }
   }
 
