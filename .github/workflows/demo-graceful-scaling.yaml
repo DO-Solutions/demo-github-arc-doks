@@ -5,7 +5,7 @@ on:
 
 jobs:
   long-running:
-    runs-on: [self-hosted, doks-demo]
+    runs-on: doks-demo
     steps:
       - name: Start long-running job
         run: |

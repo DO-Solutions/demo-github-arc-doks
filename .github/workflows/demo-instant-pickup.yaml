@@ -5,7 +5,7 @@ on:
 
 jobs:
   instant-pickup:
-    runs-on: [self-hosted, doks-demo]
+    runs-on: doks-demo
     steps:
       - name: Record start time
         run: |

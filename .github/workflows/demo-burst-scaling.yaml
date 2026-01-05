@@ -5,7 +5,7 @@ on:
 
 jobs:
   burst:
-    runs-on: [self-hosted, doks-demo]
+    runs-on: doks-demo
     strategy:
       matrix:
         job: [1, 2, 3, 4, 5]

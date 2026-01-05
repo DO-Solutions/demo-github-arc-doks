@@ -5,7 +5,7 @@ on:
 
 jobs:
   docker-build:
-    runs-on: [self-hosted, doks-demo]
+    runs-on: doks-demo
     steps:
       - name: Introduction
         run: |
