@@ -1,0 +1,36 @@
+# ARC Runner Scale Set Helm values
+# Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+
+githubConfigUrl: "https://github.com/DO-Solutions/demo-github-arc-doks"
+githubConfigSecret: github-arc-secret
+
+runnerScaleSetName: "doks-demo"
+
+minRunners: 0
+maxRunners: 10
+
+containerMode:
+  type: dind
+
+template:
+  spec:
+    nodeSelector:
+      node-role: jobs
+    tolerations:
+      - key: "node-role"
+        operator: "Equal"
+        value: "jobs"
+        effect: "NoSchedule"
+    priorityClassName: arc-runner
+    containers:
+      - name: runner
+        resources:
+          limits:
+            cpu: "1500m"
+            memory: "3Gi"
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+
+# Listener will automatically schedule on management nodes
+# because jobs nodes have taints and listener has no tolerations

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pause-pods
+  namespace: arc-runners
+  labels:
+    app: pause-pods
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pause-pods
+  template:
+    metadata:
+      labels:
+        app: pause-pods
+    spec:
+      priorityClassName: pause-pods
+      nodeSelector:
+        node-role: jobs
+      tolerations:
+        - key: "node-role"
+          operator: "Equal"
+          value: "jobs"
+          effect: "NoSchedule"
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.9
+          resources:
+            requests:
+              # ~70% of s-2vcpu-4gb allocatable (accounting for system pods)
+              cpu: "1300m"
+              memory: "2Gi"
+            limits:
+              cpu: "1300m"
+              memory: "2Gi"

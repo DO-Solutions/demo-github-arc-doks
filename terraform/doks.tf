@@ -7,7 +7,6 @@ resource "digitalocean_kubernetes_cluster" "main" {
   service_subnet = var.service_subnet
 
   # Management node pool - fixed size for ARC controller, listeners, and system pods
-  # No taint - allows system pods (coredns, hubble, csi, etc.) to schedule here
   node_pool {
     name       = "management"
     size       = "s-2vcpu-4gb"
