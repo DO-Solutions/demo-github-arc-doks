@@ -5,7 +5,7 @@ on:
 
 jobs:
   docker-build:
-    runs-on: doks-demo
+    runs-on: doks-small
     steps:
       - name: Introduction
         run: |

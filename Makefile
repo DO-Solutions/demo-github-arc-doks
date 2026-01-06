@@ -6,9 +6,10 @@
 #   GITHUB_TOKEN - For runner scale set (fine-grained PAT with Actions permissions)
 
 .PHONY: help check-env check-tools tf-init tf-plan tf-apply tf-destroy kubeconfig \
-        k8s-foundation arc-controller arc-runner-set pause-pods \
+        k8s-foundation arc-controller arc-runner-set arc-runner-set-large pause-pods \
         infra arc deploy status logs-controller logs-listener \
-        pause-scale-up pause-scale-down clean-arc clean-all
+        pause-scale-up pause-scale-down clean-arc clean-all \
+        demo-preflight demo-small demo-large demo-docker-build
 
 CLUSTER_NAME := arc-demo-cluster
 HELM_CONTROLLER_CHART := oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
@@ -28,10 +29,11 @@ help:
 	@echo "  kubeconfig    Save and switch to cluster context"
 	@echo ""
 	@echo "Kubernetes/ARC:"
-	@echo "  k8s-foundation  Apply namespaces and priority classes"
-	@echo "  arc-controller  Install ARC controller"
-	@echo "  arc-runner-set  Install runner scale set (needs GITHUB_TOKEN)"
-	@echo "  pause-pods      Deploy pause pods"
+	@echo "  k8s-foundation       Apply namespaces and priority classes"
+	@echo "  arc-controller       Install ARC controller"
+	@echo "  arc-runner-set       Install small runner scale set (needs GITHUB_TOKEN)"
+	@echo "  arc-runner-set-large Install large runner scale set (needs GITHUB_TOKEN)"
+	@echo "  pause-pods           Deploy pause pods"
 	@echo ""
 	@echo "Composite:"
 	@echo "  infra         Full infra (tf-init + tf-apply + kubeconfig)"
@@ -44,6 +46,12 @@ help:
 	@echo "  logs-listener    Tail listener logs"
 	@echo "  pause-scale-up   Scale pause pods to 1"
 	@echo "  pause-scale-down Scale pause pods to 0"
+	@echo ""
+	@echo "Demo:"
+	@echo "  demo-preflight     Run pre-demo health checks"
+	@echo "  demo-small         Trigger small runner workflow"
+	@echo "  demo-large         Trigger large runner workflow"
+	@echo "  demo-docker-build  Trigger docker build workflow"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean-arc     Uninstall ARC components"
@@ -104,13 +112,24 @@ arc-runner-set:
 		-l app.kubernetes.io/component=runner-scale-set-listener \
 		-n arc-runners --timeout=120s
 
+arc-runner-set-large:
+	@test -n "$(GITHUB_TOKEN)" || (echo "Error: GITHUB_TOKEN not set" && exit 1)
+	@kubectl get secret github-arc-secret -n arc-runners 2>/dev/null || \
+		kubectl create secret generic github-arc-secret \
+			--namespace arc-runners \
+			--from-literal=github_token="$(GITHUB_TOKEN)"
+	helm upgrade --install arc-runner-set-large \
+		--namespace arc-runners \
+		$(HELM_RUNNER_CHART) \
+		-f kubernetes/runner-scale-set-large/values.yaml
+
 pause-pods:
 	kubectl apply -f kubernetes/pause-pods/deployment.yaml
 
 # Composite targets
 infra: tf-init tf-apply kubeconfig
 
-arc: k8s-foundation arc-controller arc-runner-set pause-pods
+arc: k8s-foundation arc-controller arc-runner-set arc-runner-set-large pause-pods
 
 deploy: infra arc
 
@@ -148,3 +167,44 @@ clean-arc:
 	-kubectl delete -f kubernetes/namespaces.yaml
 
 clean-all: clean-arc tf-destroy
+
+# Demo targets
+demo-preflight:
+	@echo "=== Pre-Demo Preflight Check ==="
+	@echo ""
+	@echo "Checking cluster health..."
+	@kubectl get nodes -L node-role || (echo "FAIL: Cannot reach cluster" && exit 1)
+	@echo ""
+	@echo "Checking ARC controller..."
+	@kubectl get pods -n arc-systems -l app.kubernetes.io/name=gha-rs-controller | grep Running || (echo "FAIL: Controller not running" && exit 1)
+	@echo ""
+	@echo "Checking listener..."
+	@kubectl get pods -n arc-systems -l app.kubernetes.io/component=runner-scale-set-listener | grep Running || (echo "FAIL: Listener not running" && exit 1)
+	@echo ""
+	@echo "Checking pause pod..."
+	@kubectl get pods -n arc-runners -l app=pause-pods | grep Running || (echo "FAIL: Pause pod not running" && exit 1)
+	@echo ""
+	@echo "Clearing stale pods..."
+	-@kubectl delete pods -n arc-runners --field-selector=status.phase=Failed 2>/dev/null || true
+	@echo ""
+	@echo "=== Preflight Complete ==="
+
+# Demo workflow triggers (using gh CLI)
+# gh auto-detects repo from current directory - works with forks
+demo-small:
+	@echo "Triggering Demo: Small Runner..."
+	@gh workflow run "Demo: Small Runner"
+	@sleep 2
+	@echo "View logs: gh run view $$(gh run list --workflow='Demo: Small Runner' --limit 1 --json databaseId -q '.[0].databaseId') --log"
+
+demo-large:
+	@echo "Triggering Demo: Large Runner..."
+	@gh workflow run "Demo: Large Runner"
+	@sleep 2
+	@echo "View logs: gh run view $$(gh run list --workflow='Demo: Large Runner' --limit 1 --json databaseId -q '.[0].databaseId') --log"
+
+demo-docker-build:
+	@echo "Triggering Demo: Docker Build..."
+	@gh workflow run "Demo: Docker Build"
+	@sleep 2
+	@echo "View logs: gh run view $$(gh run list --workflow='Demo: Docker Build' --limit 1 --json databaseId -q '.[0].databaseId') --log"

@@ -1,13 +1,13 @@
-# ARC Runner Scale Set Helm values - Small runners
+# ARC Runner Scale Set Helm values - Large runners
 # Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 
 githubConfigUrl: "https://github.com/DO-Solutions/demo-github-arc-doks"
 githubConfigSecret: github-arc-secret
 
-runnerScaleSetName: "doks-small"
+runnerScaleSetName: "doks-large"
 
 minRunners: 0
-maxRunners: 10
+maxRunners: 5
 
 containerMode:
   type: dind
@@ -27,11 +27,8 @@ template:
         image: ghcr.io/actions/actions-runner:latest
         resources:
           requests:
-            cpu: "450m"
-            memory: "875Mi"
+            cpu: "1800m"
+            memory: "3500Mi"
           limits:
-            cpu: "450m"
-            memory: "875Mi"
-
-# Listener will automatically schedule on management nodes
-# because jobs nodes have taints and listener has no tolerations
+            cpu: "1800m"
+            memory: "3500Mi"

@@ -1,0 +1,15 @@
+name: "Demo: Large Runner"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  large-job:
+    runs-on: doks-large
+    steps:
+      - name: Run job
+        run: |
+          echo "Large runner job started at $(date)"
+          echo "Sleeping for 60 seconds..."
+          sleep 60
+          echo "Job completed at $(date)"

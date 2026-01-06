@@ -28,9 +28,9 @@ spec:
           image: registry.k8s.io/pause:3.9
           resources:
             requests:
-              # ~70% of s-2vcpu-4gb allocatable (accounting for system pods)
-              cpu: "1300m"
-              memory: "2Gi"
+              # ~30% of s-2vcpu-4gb allocatable - preempted when 3+ small runners arrive
+              cpu: "540m"
+              memory: "1050Mi"
             limits:
-              cpu: "1300m"
-              memory: "2Gi"
+              cpu: "540m"
+              memory: "1050Mi"

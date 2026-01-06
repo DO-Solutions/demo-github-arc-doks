@@ -1,0 +1,15 @@
+name: "Demo: Small Runner"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  small-job:
+    runs-on: doks-small
+    steps:
+      - name: Run job
+        run: |
+          echo "Small runner job started at $(date)"
+          echo "Sleeping for 60 seconds..."
+          sleep 60
+          echo "Job completed at $(date)"
