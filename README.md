@@ -10,7 +10,7 @@ This demo addresses common pain points when migrating from AWS ECS-based GitHub 
 |------------|----------|------|
 | **Cold-start latency (minutes)** | Pause pods maintain warm node capacity for instant job pickup | Small Runner |
 | **Docker build support** | Docker-in-Docker (DinD) mode - existing workflows work unchanged | Docker Build |
-| **T-shirt sized runners** | Small (25% node) and Large (100% node) scale sets | Small/Large Runner |
+| **T-shirt sized runners** | Small (~25% node) and Large (~70% node) scale sets | Small/Large Runner |
 | **Node autoscaling** | Run 4+ small jobs to trigger cluster autoscaler | Small Runner (4x) |
 
 ## Architecture
@@ -19,7 +19,7 @@ This demo addresses common pain points when migrating from AWS ECS-based GitHub 
 |-----------|---------|
 | **DOKS Cluster** | Kubernetes cluster with management and job node pools |
 | **ARC Controller** | Manages runner scale sets, runs on management nodes |
-| **Runner Scale Sets** | Two t-shirt sized scale sets: small (25% node) and large (100% node) |
+| **Runner Scale Sets** | Two t-shirt sized scale sets: small (~25% node) and large (~70% node) |
 | **Pause Pods** | Low-priority pods (30% node) - preempted when 3+ small runners arrive |
 | **NAT Gateway** | Static egress IP for GitHub Enterprise IP whitelisting |
 
@@ -83,7 +83,7 @@ kubectl get events -n arc-runners -w
 | Demo | What You'll See |
 |------|-----------------|
 | **Small Runner** | Pause pod evicted, runner pod starts in <2s, uses 25% of node |
-| **Large Runner** | Runner pod fills entire node (100%), pause pod evicted |
+| **Large Runner** | Runner pod uses ~70% of node, pause pod evicted |
 | **Docker Build** | Runner pod with DinD sidecar, successful build in logs |
 | **4x Small Runner** | 3 runners fill 75%, 4th triggers autoscaler (new node in 60-90s) |
 

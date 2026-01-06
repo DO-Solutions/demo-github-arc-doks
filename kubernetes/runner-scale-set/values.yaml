@@ -1,5 +1,6 @@
 # ARC Runner Scale Set Helm values - Small runners
 # Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+# Full DinD template with resource limits (containerMode not used to allow customization)
 
 githubConfigUrl: "https://github.com/DO-Solutions/demo-github-arc-doks"
 githubConfigSecret: github-arc-secret
@@ -8,9 +9,6 @@ runnerScaleSetName: "doks-small"
 
 minRunners: 0
 maxRunners: 10
-
-containerMode:
-  type: dind
 
 template:
   spec:
@@ -22,9 +20,22 @@ template:
         value: "jobs"
         effect: "NoSchedule"
     priorityClassName: arc-runner
+    initContainers:
+      - name: init-dind-externals
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+        volumeMounts:
+          - name: dind-externals
+            mountPath: /home/runner/tmpDir
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        env:
+          - name: DOCKER_HOST
+            value: unix:///var/run/docker.sock
+          - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
+            value: "120"
         resources:
           requests:
             cpu: "450m"
@@ -32,6 +43,33 @@ template:
           limits:
             cpu: "450m"
             memory: "875Mi"
-
-# Listener will automatically schedule on management nodes
-# because jobs nodes have taints and listener has no tolerations
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: dind-sock
+            mountPath: /var/run
+      - name: dind
+        image: docker:dind
+        args:
+          - dockerd
+          - --host=unix:///var/run/docker.sock
+          - --group=$(DOCKER_GROUP_GID)
+        env:
+          - name: DOCKER_GROUP_GID
+            value: "123"
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: dind-sock
+            mountPath: /var/run
+          - name: dind-externals
+            mountPath: /home/runner/externals
+    volumes:
+      - name: work
+        emptyDir: {}
+      - name: dind-sock
+        emptyDir: {}
+      - name: dind-externals
+        emptyDir: {}
