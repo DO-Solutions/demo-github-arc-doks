@@ -40,8 +40,6 @@ If you forked this repo, update the runner scale set configuration:
 ### Environment Variables
 ```bash
 export DIGITALOCEAN_TOKEN="your-do-token"
-export AWS_ACCESS_KEY_ID="your-spaces-key"       # For Terraform state backend
-export AWS_SECRET_ACCESS_KEY="your-spaces-secret"
 export GITHUB_TOKEN="ghp_your-github-pat"
 ```
 

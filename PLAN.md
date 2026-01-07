@@ -57,15 +57,12 @@ github-runner-doks-demo/
 ├── .github/
 │   └── workflows/
 │       ├── demo-instant-pickup.yaml
-│       ├── demo-graceful-scaling.yaml
 │       ├── demo-docker-build.yaml
 │       └── demo-burst-scaling.yaml
 ├── demo-app/
 │   ├── Dockerfile
 │   └── entrypoint.sh
-├── docs/
-│   ├── demo-script.md
-│   └── post-demo-handoff.md
+├── Makefile
 ├── PLAN.md
 ├── SPEC.md
 └── README.md
@@ -691,48 +688,6 @@ jobs:
           echo "SUCCESS: Job picked up instantly by preempting pause pod."
 ```
 
-#### `.github/workflows/demo-graceful-scaling.yaml`
-```yaml
-name: "Demo: Graceful Scaling (Long-Running)"
-
-on:
-  workflow_dispatch:
-
-jobs:
-  long-running:
-    runs-on: [self-hosted, doks-demo]
-    steps:
-      - name: Start long-running job
-        run: |
-          echo "============================================"
-          echo "  DEMO: Graceful Scaling"
-          echo "============================================"
-          echo ""
-          echo "Job started at: $(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
-          echo ""
-          echo "This job runs for 3 minutes to demonstrate"
-          echo "that active runners are NEVER terminated."
-          echo ""
-          echo "Unlike ECS, ARC tracks runner state via GitHub API."
-          echo "Scale-down only targets idle runners."
-          echo ""
-
-      - name: Simulate work (3 minutes)
-        run: |
-          for i in {1..18}; do
-            echo "[$(date -u +%H:%M:%S)] Still running... iteration $i/18"
-            sleep 10
-          done
-
-      - name: Complete
-        run: |
-          echo ""
-          echo "Job completed at: $(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
-          echo ""
-          echo "SUCCESS: Runner was NEVER interrupted during execution."
-          echo "The runner will now terminate gracefully."
-```
-
 #### `.github/workflows/demo-docker-build.yaml`
 ```yaml
 name: "Demo: Docker Build"
@@ -839,7 +794,6 @@ jobs:
 - [x] Push to GitHub and verify workflows appear in Actions tab
 - [x] Each workflow shows "Run workflow" button (workflow_dispatch)
 - [x] demo-instant-pickup: Completed successfully
-- [x] demo-graceful-scaling: Completed successfully (3m23s)
 - [x] demo-docker-build: Built and ran container successfully
 - [x] demo-burst-scaling: 5 concurrent jobs completed, node scaling triggered (1→3 nodes)
 
@@ -902,176 +856,66 @@ echo ""
 ## Phase 6: Documentation
 
 ### Objective
-Create demo script and customer handoff documentation.
+Create demo script and customer handoff documentation. Add demo-related make targets for preflight checks and workflow triggering.
+
+### Makefile Additions
+
+Add the following targets to the existing Makefile:
+
+```makefile
+# Demo preflight check
+demo-preflight:
+	@echo "=== Pre-Demo Preflight Check ==="
+	@echo ""
+	@echo "Checking cluster health..."
+	@kubectl get nodes -L node-role || (echo "FAIL: Cannot reach cluster" && exit 1)
+	@echo ""
+	@echo "Checking ARC controller..."
+	@kubectl get pods -n arc-systems -l app.kubernetes.io/name=gha-rs-controller | grep Running || (echo "FAIL: Controller not running" && exit 1)
+	@echo ""
+	@echo "Checking listener..."
+	@kubectl get pods -n arc-systems -l app.kubernetes.io/component=runner-scale-set-listener | grep Running || (echo "FAIL: Listener not running" && exit 1)
+	@echo ""
+	@echo "Checking pause pod..."
+	@kubectl get pods -n arc-runners -l app=pause-pods | grep Running || (echo "FAIL: Pause pod not running" && exit 1)
+	@echo ""
+	@echo "Clearing stale pods..."
+	-@kubectl delete pods -n arc-runners --field-selector=status.phase=Failed 2>/dev/null || true
+	@echo ""
+	@echo "=== Preflight Complete ==="
+
+# Demo workflow triggers (using gh CLI)
+# gh auto-detects repo from current directory - works with forks
+demo-instant-pickup:
+	gh workflow run "Demo: Instant Job Pickup"
+
+demo-docker-build:
+	gh workflow run "Demo: Docker Build"
+
+demo-burst-scaling:
+	gh workflow run "Demo: Burst Scaling"
+
+```
+
+Update the `.PHONY` line to include the new targets:
+```makefile
+.PHONY: help check-env check-tools tf-init tf-plan tf-apply tf-destroy kubeconfig \
+        k8s-foundation arc-controller arc-runner-set pause-pods \
+        infra arc deploy status logs-controller logs-listener \
+        pause-scale-up pause-scale-down clean-arc clean-all \
+        demo-preflight demo-instant-pickup demo-docker-build demo-burst-scaling
+```
+
+Update the `help` target to include a Demo section:
+```makefile
+	@echo "Demo:"
+	@echo "  demo-preflight       Run pre-demo health checks"
+	@echo "  demo-instant-pickup  Trigger instant pickup workflow"
+	@echo "  demo-docker-build    Trigger docker build workflow"
+	@echo "  demo-burst-scaling   Trigger burst scaling workflow"
+```
 
 ### Files to Create
-
-#### `docs/demo-script.md`
-```markdown
-# Demo Script: GitHub Runners on DOKS
-
-## Pre-Demo Checklist (Day Before)
-
-- [ ] Verify cluster health: `kubectl get nodes`
-- [ ] Verify ARC controller: `kubectl get pods -n arc-systems`
-- [ ] Verify listener running: `kubectl get pods -n arc-runners -l app.kubernetes.io/component=runner-scale-set-listener`
-- [ ] Verify pause pod running: `kubectl get pods -n arc-runners -l app=pause-pods`
-- [ ] Run each workflow once to confirm functionality
-- [ ] Clear stale pods: `kubectl delete pods -n arc-runners --field-selector=status.phase=Failed`
-
-## Terminal Setup
-
-Open three terminal windows side-by-side:
-
-```bash
-# Terminal 1: Watch nodes
-watch -n2 'kubectl get nodes -L node-role'
-
-# Terminal 2: Watch runner pods
-watch -n1 'kubectl get pods -n arc-runners -o wide'
-
-# Terminal 3: Watch events
-kubectl get events -n arc-runners -w
-```
-
-## Demo Flow (60 minutes)
-
-### Opening (5 min)
-- Recap customer pain points from their ECS experience
-- Set expectations: "You'll see each problem solved live"
-
-### Architecture Walkthrough (10 min)
-- Show architecture diagram from PROJECT.pdf
-- Explain flow: GitHub → Listener → Controller → Runner → Termination
-- Key message: "ARC knows which runners are busy - ECS doesn't"
-
-### Environment Tour (10 min)
-
-```bash
-# Show node separation
-kubectl get nodes -L node-role
-
-# Show ARC components
-kubectl get pods -n arc-systems -o wide
-kubectl get pods -n arc-runners -o wide
-
-# Show scale set registration
-kubectl get autoscalingrunnerset -n arc-runners
-```
-
-### Demo 1: Instant Job Pickup (8 min)
-
-1. Show pause pod running: `kubectl get pods -n arc-runners -l app=pause-pods`
-2. Open GitHub Actions UI
-3. Trigger `demo-instant-pickup` workflow
-4. Watch Terminal 2: pause pod evicted, runner starts instantly
-5. Key metric: Job pickup < 2 seconds
-6. Compare: "Your ECS cold-start is minutes, this is seconds"
-
-### Demo 2: Graceful Scaling (10 min)
-
-1. Trigger `demo-graceful-scaling` workflow
-2. Show runner pod running: `kubectl get pods -n arc-runners`
-3. Explain: "This runner will run for 3 minutes"
-4. Show: "ARC tracks this via GitHub API - it knows the job is active"
-5. Discuss: "In ECS, this could be killed during scale-down"
-6. Wait for completion
-7. Show: "Runner terminated only AFTER reporting complete to GitHub"
-
-### Demo 3: Docker Build (5 min)
-
-1. Trigger `demo-docker-build` workflow
-2. Point out DinD in job logs
-3. Show successful build
-4. Key message: "Your existing workflows work without modification"
-
-### Demo 4: Burst Scaling (7 min)
-
-1. Trigger `demo-burst-scaling` workflow
-2. Watch Terminal 2: First job instant (takes pause pod's spot)
-3. Watch Terminal 1: New nodes provisioning (60-90 seconds)
-4. Show all 5 jobs completing successfully
-5. Key message: "Automatic scaling, no custom scripts"
-
-### Q&A (5 min)
-- Address questions
-- Discuss next steps
-
-## Useful Commands During Demo
-
-```bash
-# Quick pod status
-kubectl get pods -n arc-runners -o wide
-
-# Describe scale set
-kubectl describe autoscalingrunnerset -n arc-runners
-
-# Check node scaling
-kubectl get nodes -w
-
-# View runner logs
-kubectl logs -n arc-runners -l actions.github.com/scale-set-name=doks-demo -f
-```
-```
-
-#### `docs/post-demo-handoff.md`
-```markdown
-# Post-Demo Reference Guide
-
-## What Was Demonstrated
-
-| Customer Pain Point | Solution | Demo Workflow |
-|---------------------|----------|---------------|
-| Job failures during scale-down | ARC runner-aware scaling | Graceful Scaling |
-| Cold-start latency (minutes) | Pause pod warm capacity | Instant Pickup |
-| Docker build support needed | DinD container mode | Docker Build |
-| Complex custom scaling logic | Native K8s + ARC | Burst Scaling |
-
-## Architecture Components
-
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| ARC Controller | Manages all runner scale sets | arc-systems namespace |
-| Listener Pod | Maintains connection to GitHub | arc-systems namespace |
-| Runner Pods | Ephemeral, one per job | arc-runners namespace |
-| Pause Pods | Maintain warm node capacity | arc-runners namespace |
-| NAT Gateway | Static egress IP for whitelisting | VPC level |
-
-## Key Resources
-
-- [ARC Documentation](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller)
-- [DOKS Documentation](https://docs.digitalocean.com/products/kubernetes/)
-- [NAT Gateway Documentation](https://docs.digitalocean.com/products/networking/vpc/how-to/configure-nat-gateway/)
-- [DOCR Documentation](https://docs.digitalocean.com/products/container-registry/)
-
-## Production Considerations
-
-### Authentication
-- Replace PAT with GitHub App for production
-- GitHub App provides better audit trail and fine-grained permissions
-
-### Multi-Organization Support
-- Each org gets dedicated namespace: `arc-runners-{org}`
-- Separate GitHub credentials per org
-- Single ARC controller manages all scale sets
-
-### Scaling Tuning
-- Adjust pause pod replicas based on concurrent job patterns
-- Monitor queue depth to right-size warm capacity
-- Consider time-based scaling with KEDA for business hours
-
-### Observability
-- Add Prometheus for ARC metrics
-- Configure alerts for queue depth, pod failures
-- Consider Grafana dashboards for visibility
-
-## Next Steps
-
-1. **GitHub App Setup**: Create GitHub App with required permissions
-2. **Repository Configuration**: Point runner scale set at production repos
-3. **Observability**: Discuss monitoring integration requirements
-4. **Migration Planning**: Parallel run vs cutover strategy
-```
 
 #### `README.md`
 ```markdown
@@ -1079,90 +923,91 @@ kubectl logs -n arc-runners -l actions.github.com/scale-set-name=doks-demo -f
 
 This repository demonstrates GitHub Actions self-hosted runners on DigitalOcean Kubernetes Service (DOKS) using Actions Runner Controller (ARC).
 
-## Documentation
+## What This Demo Shows
 
-| Document | Purpose |
-|----------|---------|
-| `PROJECT.pdf` | Full architecture design |
-| `SPEC.md` | Demo environment specification |
-| `PLAN.md` | Implementation phases |
-| `docs/demo-script.md` | Demo meeting guide |
-| `docs/post-demo-handoff.md` | Customer reference |
+This demo addresses common pain points when migrating from AWS ECS-based GitHub runners:
+
+| Pain Point | Solution | Demo |
+|------------|----------|------|
+| **Cold-start latency (minutes)** | Pause pods maintain warm node capacity for instant job pickup | Instant Pickup |
+| **Docker build support** | Docker-in-Docker (DinD) mode - existing workflows work unchanged | Docker Build |
+| **Complex custom scaling logic** | Native Kubernetes autoscaling + ARC handles everything | Burst Scaling |
+
+## Architecture
+
+| Component | Purpose |
+|-----------|---------|
+| **DOKS Cluster** | Kubernetes cluster with management and job node pools |
+| **ARC Controller** | Manages runner scale sets, runs on management nodes |
+| **Runner Scale Set** | Ephemeral runner pods, one per job, on job nodes |
+| **Pause Pods** | Low-priority pods that maintain warm capacity, preempted by runners |
+| **NAT Gateway** | Static egress IP for GitHub Enterprise IP whitelisting |
 
 ## Quick Start
 
 ### Prerequisites
 - DigitalOcean account with API token
-- GitHub PAT with Actions permissions
-- `doctl`, `kubectl`, `terraform`, `helm` installed
+- GitHub PAT with Actions permissions (fine-grained: Actions R/W, Administration R/W, Metadata R)
+- CLI tools: `doctl`, `kubectl`, `terraform`, `helm`, `gh`
 
-### Deploy Infrastructure
+### Fork Setup
+If you forked this repo, update the runner scale set configuration:
 ```bash
-# Ensure environment variables are set:
-# - DO_TOKEN (DigitalOcean API token)
-# - AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (for Spaces backend)
-
-cd terraform
-terraform init
-terraform apply -var="do_token=$DO_TOKEN"
-
-# Get kubeconfig
-terraform output -raw kubeconfig > ~/.kube/arc-demo
-export KUBECONFIG=~/.kube/arc-demo
+# Edit kubernetes/runner-scale-set/values.yaml
+# Change githubConfigUrl to your fork's URL
 ```
 
-### Deploy ARC
+### Environment Variables
 ```bash
-# Foundation
-kubectl apply -f kubernetes/namespaces.yaml
-kubectl apply -f kubernetes/pause-pods/priority-class.yaml
-
-# Controller
-helm install arc \
-  --namespace arc-systems \
-  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller \
-  -f kubernetes/arc-controller/values.yaml
-
-# Runners (create secret first)
-kubectl create secret generic github-arc-secret \
-  --namespace arc-runners \
-  --from-literal=github_token="ghp_YOUR_TOKEN"
-
-helm install arc-runner-set \
-  --namespace arc-runners \
-  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
-  -f kubernetes/runner-scale-set/values.yaml
-
-# Pause pods
-kubectl apply -f kubernetes/pause-pods/deployment.yaml
+export DIGITALOCEAN_TOKEN="your-do-token"
+export AWS_ACCESS_KEY_ID="your-spaces-key"       # For Terraform state backend
+export AWS_SECRET_ACCESS_KEY="your-spaces-secret"
+export GITHUB_TOKEN="ghp_your-github-pat"
 ```
 
-## Demo Workflows
+### Deploy
+```bash
+make deploy   # Full deployment (infrastructure + ARC)
+make status   # Verify everything is running
+```
 
-| Workflow | Purpose | Demonstrates |
-|----------|---------|--------------|
-| demo-instant-pickup | Sub-second job pickup | Pause pod preemption |
-| demo-graceful-scaling | Long-running job protection | Runner-aware scaling |
-| demo-docker-build | Container image builds | DinD support |
-| demo-burst-scaling | Concurrent job handling | Cluster autoscaling |
+## Running the Demos
+
+```bash
+# Pre-demo health check
+make demo-preflight
+
+# Individual demos
+make demo-instant-pickup      # Sub-second job pickup (preempts pause pod)
+make demo-docker-build        # Build and run a Docker container
+make demo-burst-scaling       # 5 concurrent jobs trigger node autoscaling
+```
+
+## Operations
+
+```bash
+make status             # Cluster and pod status
+make logs-controller    # ARC controller logs
+make logs-listener      # Listener pod logs
+make pause-scale-up     # Restore warm capacity
+make pause-scale-down   # Reduce costs
+```
 
 ## Cleanup
 
 ```bash
-# Scale down to reduce costs
-kubectl scale deployment pause-pods -n arc-runners --replicas=0
-
-# Full teardown (ensure DO_TOKEN is set)
-helm uninstall arc-runner-set -n arc-runners
-helm uninstall arc -n arc-systems
-cd terraform && terraform destroy -var="do_token=$DO_TOKEN"
+make pause-scale-down   # Scale down (keep infrastructure)
+make clean-all          # Full teardown
 ```
+
+Run `make help` for all available targets.
 ```
 
 ### Verification Checklist (verify each item and mark `[x]` when confirmed)
-- [ ] `docs/demo-script.md` created
-- [ ] `docs/post-demo-handoff.md` created
-- [ ] `README.md` updated
+- [x] Makefile updated with demo targets (`demo-preflight`, `demo-instant-pickup`, etc.)
+- [x] `make demo-preflight` runs successfully (correctly detects component status)
+- [x] `make demo-instant-pickup` triggers workflow via `gh` CLI
+- [x] `README.md` updated
 
 ---
 
@@ -1170,24 +1015,26 @@ cd terraform && terraform destroy -var="do_token=$DO_TOKEN"
 
 Run through this before the demo meeting to confirm all phases are complete:
 
+### Quick Check (Recommended)
+```bash
+make demo-preflight   # Automated health check for ARC components
+make status           # Full cluster and pod status
+```
+
 ### Infrastructure
-- [ ] All nodes healthy: `kubectl get nodes`
+- [ ] All nodes healthy: `make status` or `kubectl get nodes`
 - [ ] NAT Gateway active: `doctl compute nat-gateway list`
 - [ ] DOCR accessible: `doctl registry get`
 
 ### ARC Components
-- [ ] Controller running: `kubectl get pods -n arc-systems`
-- [ ] Listener connected: `kubectl get pods -n arc-runners -l app.kubernetes.io/component=runner-scale-set-listener`
+- [ ] `make demo-preflight` passes all checks
 - [ ] Scale set registered in GitHub UI
-
-### Warm Capacity
-- [ ] Pause pod running on job node: `kubectl get pods -n arc-runners -l app=pause-pods -o wide`
 
 ### Workflows
 - [ ] All four workflows visible in GitHub Actions
-- [ ] Each workflow runs successfully
-- [ ] Docker build produces valid image
-- [ ] Burst scaling provisions additional nodes
+- [ ] `make demo-instant-pickup` triggers successfully
+- [ ] `make demo-docker-build` builds and runs container
+- [ ] `make demo-burst-scaling` provisions additional nodes
 
 ---
 
@@ -1242,11 +1089,28 @@ make arc            # Deploy ARC components
 | `logs-listener` | Tail listener pod logs |
 | `pause-scale-up` | Scale pause pods to 1 |
 | `pause-scale-down` | Scale pause pods to 0 |
+| **Demo** | |
+| `demo-preflight` | Run pre-demo health checks |
+| `demo-instant-pickup` | Trigger instant pickup workflow |
+| `demo-docker-build` | Trigger docker build workflow |
+| `demo-burst-scaling` | Trigger burst scaling workflow |
 | **Cleanup** | |
 | `clean-arc` | Uninstall ARC components |
 | `clean-all` | Full teardown |
 
 ### Example Workflows
+
+**Prepare for demo:**
+```bash
+make demo-preflight   # Verify everything is healthy
+```
+
+**Run demos during meeting:**
+```bash
+make demo-instant-pickup      # Show instant job pickup
+make demo-docker-build        # Show Docker build capability
+make demo-burst-scaling       # Show cluster autoscaling
+```
 
 **Update ARC configuration:**
 ```bash
@@ -1276,29 +1140,24 @@ make clean-all
 
 ### Reduce Costs (Keep Infrastructure)
 ```bash
-# Scale pause pods to zero
-kubectl scale deployment pause-pods -n arc-runners --replicas=0
-
-# Job nodes will scale down after idle timeout
+# Scale pause pods to zero (job nodes will scale down after idle timeout)
+make pause-scale-down
 ```
 
 ### Full Teardown
 ```bash
+# Ensure environment variables are set, then:
+make clean-all
+```
+
+Or manually:
+```bash
 # Source environment variables
 source /home/jjk3/env/do-solutions.env
 
-# Remove Helm releases
-helm uninstall arc-runner-set -n arc-runners
-helm uninstall arc -n arc-systems
-
-# Remove Kubernetes resources
-kubectl delete -f kubernetes/pause-pods/
-kubectl delete -f kubernetes/namespaces.yaml
-
-# Remove NAT Gateway
-doctl compute nat-gateway delete arc-demo-nat
+# Remove ARC components
+make clean-arc
 
 # Destroy Terraform infrastructure
-cd terraform
-terraform destroy -var="do_token=$DO_TOKEN"
+make tf-destroy
 ```

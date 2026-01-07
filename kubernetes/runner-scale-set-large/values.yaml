@@ -1,6 +1,9 @@
 # ARC Runner Scale Set Helm values - Large runners
 # Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
-# Full DinD template with resource limits (containerMode not used to allow customization)
+#
+# This uses Docker-in-Docker (DinD) mode with a full pod template.
+# We don't use containerMode.type=dind because we need custom resource limits.
+# DinD allows workflows to run docker commands (build, run, compose, etc).
 
 githubConfigUrl: "https://github.com/DO-Solutions/demo-github-arc-doks"
 githubConfigSecret: github-arc-secret
@@ -20,6 +23,11 @@ template:
         value: "jobs"
         effect: "NoSchedule"
     priorityClassName: arc-runner
+
+    # Init container: Copy runner "externals" to a shared volume.
+    # The externals directory contains Node.js runtimes and tools needed to
+    # execute GitHub Actions. The DinD sidecar needs access to these files,
+    # but they only exist in the runner image - so we copy them at startup.
     initContainers:
       - name: init-dind-externals
         image: ghcr.io/actions/actions-runner:latest
@@ -27,13 +35,19 @@ template:
         volumeMounts:
           - name: dind-externals
             mountPath: /home/runner/tmpDir
+
     containers:
+      # Runner container: Executes GitHub Actions workflows.
+      # Communicates with Docker via Unix socket in the shared dind-sock volume.
       - name: runner
         image: ghcr.io/actions/actions-runner:latest
         command: ["/home/runner/run.sh"]
         env:
+          # Points to the Unix socket created by the dind sidecar in the shared volume.
+          # This is NOT network/TCP - both containers mount the same emptyDir at /var/run.
           - name: DOCKER_HOST
             value: unix:///var/run/docker.sock
+          # Wait for the dind sidecar to create the socket before starting workflows.
           - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
             value: "120"
         resources:
@@ -46,8 +60,12 @@ template:
         volumeMounts:
           - name: work
             mountPath: /home/runner/_work
+          # Shared volume where dind creates docker.sock
           - name: dind-sock
             mountPath: /var/run
+
+      # DinD sidecar: Runs the Docker daemon.
+      # Creates docker.sock in the shared volume for the runner to use.
       - name: dind
         image: docker:dind
         args:
@@ -57,19 +75,28 @@ template:
         env:
           - name: DOCKER_GROUP_GID
             value: "123"
+        # Privileged mode required to run nested containers (docker-in-docker)
         securityContext:
           privileged: true
         volumeMounts:
+          # Shared workspace - docker containers can access checked-out code
           - name: work
             mountPath: /home/runner/_work
+          # Shared volume where this container creates docker.sock
           - name: dind-sock
             mountPath: /var/run
+          # Externals copied by init container - needed for Actions to find Node.js
           - name: dind-externals
             mountPath: /home/runner/externals
+
     volumes:
+      # Shared workspace between runner and dind containers
       - name: work
         emptyDir: {}
+      # Shared Unix socket - dind creates docker.sock here, runner reads it.
+      # This is faster and simpler than TCP networking between containers.
       - name: dind-sock
         emptyDir: {}
+      # Runner externals (Node.js, tools) copied by init container for dind to use
       - name: dind-externals
         emptyDir: {}

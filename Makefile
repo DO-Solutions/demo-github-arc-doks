@@ -2,7 +2,6 @@
 #
 # Required env vars:
 #   DIGITALOCEAN_TOKEN - DigitalOcean API token
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY - For Spaces backend
 #   GITHUB_TOKEN - For runner scale set (fine-grained PAT with Actions permissions)
 
 .PHONY: help check-env check-tools tf-init tf-plan tf-apply tf-destroy kubeconfig \
@@ -18,7 +17,7 @@ HELM_RUNNER_CHART := oci://ghcr.io/actions/actions-runner-controller-charts/gha-
 help:
 	@echo "GitHub Runner on DOKS Demo"
 	@echo ""
-	@echo "Required env vars: DIGITALOCEAN_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY"
+	@echo "Required env vars: DIGITALOCEAN_TOKEN"
 	@echo "For runner-set:    GITHUB_TOKEN"
 	@echo ""
 	@echo "Infrastructure:"
