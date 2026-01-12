@@ -28,8 +28,8 @@ resource "digitalocean_kubernetes_node_pool" "jobs" {
   cluster_id = digitalocean_kubernetes_cluster.main.id
   name       = "jobs"
   size       = "s-2vcpu-4gb"
-  min_nodes  = 1
-  max_nodes  = 3
+  min_nodes  = 0
+  max_nodes  = 50
   auto_scale = true
 
   labels = {
