@@ -21,7 +21,7 @@ This demo addresses common pain points when migrating from AWS ECS-based GitHub 
 | **ARC Controller** | Manages runner scale sets, runs on management nodes |
 | **Runner Scale Sets** | Two t-shirt sized scale sets: small (~25% node) and large (~70% node) |
 | **Pause Pods** | Low-priority pods (30% node) - preempted when 3+ small runners arrive |
-| **NAT Gateway** | Static egress IP for GitHub Enterprise IP whitelisting |
+| **NAT Gateway** | Static egress IP for GitHub Enterprise IP whitelisting (routing agent enabled) |
 
 ## Quick Start
 
@@ -80,10 +80,10 @@ kubectl get events -n arc-runners -w
 
 | Demo | What You'll See |
 |------|-----------------|
-| **Small Runner** | Pause pod evicted, runner pod starts in <2s, uses 25% of node |
+| **Small Runner** | Pause pod evicted, runner pod starts in <2s, uses ~25% of node |
 | **Large Runner** | Runner pod uses ~70% of node, pause pod evicted |
 | **Docker Build** | Runner pod with DinD sidecar, successful build in logs |
-| **4x Small Runner** | 3 runners fill 75%, 4th triggers autoscaler (new node in 60-90s) |
+| **Burst (4x Small)** | 3 runners fill ~75%, 4th triggers autoscaler (new node in 60-90s) |
 
 ### Useful Commands
 
@@ -111,6 +111,18 @@ make logs-controller    # ARC controller logs
 make logs-listener      # Listener pod logs
 make pause-scale-up     # Restore warm capacity
 make pause-scale-down   # Reduce costs
+```
+
+### Verify NAT Gateway Egress
+
+All cluster egress traffic routes through the NAT Gateway for a static IP:
+
+```bash
+# Get the NAT Gateway public IP
+terraform -chdir=terraform output nat_gateway_ip
+
+# Verify from a pod (should match NAT Gateway IP)
+kubectl run test-egress --rm --restart=Never --image=curlimages/curl -- curl -s ifconfig.me
 ```
 
 ## Cleanup

@@ -5,7 +5,7 @@
 #   GITHUB_TOKEN - For runner scale set (fine-grained PAT with Actions permissions)
 
 .PHONY: help check-env check-tools tf-init tf-plan tf-apply tf-destroy kubeconfig \
-        k8s-foundation arc-controller arc-runner-set arc-runner-set-large pause-pods \
+        k8s-foundation nat-route arc-controller arc-runner-set arc-runner-set-large pause-pods \
         infra arc deploy status logs-controller logs-listener \
         pause-scale-up pause-scale-down clean-arc clean-all \
         demo-preflight demo-small demo-large demo-docker-build
@@ -29,6 +29,7 @@ help:
 	@echo ""
 	@echo "Kubernetes/ARC:"
 	@echo "  k8s-foundation       Apply namespaces and priority classes"
+	@echo "  nat-route            Apply NAT Gateway route for static egress IP"
 	@echo "  arc-controller       Install ARC controller"
 	@echo "  arc-runner-set       Install small runner scale set (needs GITHUB_TOKEN)"
 	@echo "  arc-runner-set-large Install large runner scale set (needs GITHUB_TOKEN)"
@@ -87,6 +88,10 @@ k8s-foundation:
 	kubectl apply -f kubernetes/namespaces.yaml
 	kubectl apply -f kubernetes/pause-pods/priority-class.yaml
 
+nat-route:
+	@echo "Applying NAT Gateway default route..."
+	kubectl apply -f kubernetes/nat-route/route.yaml
+
 arc-controller:
 	helm upgrade --install arc \
 		--namespace arc-systems \
@@ -128,7 +133,7 @@ pause-pods:
 # Composite targets
 infra: tf-init tf-apply kubeconfig
 
-arc: k8s-foundation arc-controller arc-runner-set arc-runner-set-large pause-pods
+arc: k8s-foundation nat-route arc-controller arc-runner-set arc-runner-set-large pause-pods
 
 deploy: infra arc
 

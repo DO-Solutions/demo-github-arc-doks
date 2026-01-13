@@ -1,0 +1,11 @@
+# Route CRD to direct all egress traffic through NAT Gateway
+# This enables static egress IP for GitHub Enterprise whitelisting
+apiVersion: networking.doks.digitalocean.com/v1alpha1
+kind: Route
+metadata:
+  name: default-egress-via-nat
+spec:
+  destinations:
+    - "0.0.0.0/0"
+  gateways:
+    - "10.200.0.2"

@@ -6,6 +6,10 @@ resource "digitalocean_kubernetes_cluster" "main" {
   cluster_subnet = var.cluster_subnet
   service_subnet = var.service_subnet
 
+  routing_agent {
+    enabled = true
+  }
+
   # Management node pool - fixed size for ARC controller, listeners, and system pods
   node_pool {
     name       = "management"
@@ -28,8 +32,8 @@ resource "digitalocean_kubernetes_node_pool" "jobs" {
   cluster_id = digitalocean_kubernetes_cluster.main.id
   name       = "jobs"
   size       = "s-2vcpu-4gb"
-  min_nodes  = 0
-  max_nodes  = 50
+  min_nodes  = 1
+  max_nodes  = 3
   auto_scale = true
 
   labels = {
